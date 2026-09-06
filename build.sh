@@ -157,7 +157,12 @@ Environment (no flag):
       XT_DOCKER_MEMORY   Same as --memory=<size> (cap container RAM; empty = unlimited).
       XT_DOCKER_NETWORK  --network value for the build containers (e.g. "host").
                          Needed when the build must reach a proxy or mirror on the
-                         host's loopback. Default: Docker's bridge.
+                         host's loopback. Default: Docker's bridge. This also reaches
+                         `docker build`, which fetches too -- but only host, none and
+                         default work there (BuildKit refuses bridge and named
+                         networks), so use XT_DOCKER_RUN_OPTS for those. Setting a
+                         --network in both places puts two on the same `docker run`,
+                         which build.sh refuses: it has one network to give.
       XT_DOCKER_RUN_OPTS Extra `docker run` opts applied verbatim to every build
                          container, e.g. "--cpus 12" (empty = none).
       XT_DOCKER_RUN_OPTS_AOSP  Extra `docker run` opts for the AOSP (DomA source) container
@@ -565,7 +570,56 @@ unset _need_gib _free_kib
 # (e.g. http://172.17.0.1:3128) precisely so containers can reach a loopback-bound proxy,
 # and build.sh's explicit --build-arg/-e take precedence over it. So refuse up front,
 # with the three ways out, unless the container shares the host's network namespace.
-# Host networking may also have been requested through the raw run options.
+# Four variables can each put a --network on the SAME `docker run`: in_docker's argv is
+# NET_OPTS (XT_DOCKER_NETWORK), DOCKER_RUN_OPTS (XT_DOCKER_RUN_OPTS), STAGE_RUN_OPTS
+# (XT_DOCKER_RUN_OPTS_AOSP, AOSP stage only) and finally CACHE_MOUNTS (XT_CACHE_MOUNTS).
+# docker rejects most such pairs with rc=125 once the build is already running: `network
+# "host" is specified multiple times` for a repeated host, `cannot attach both
+# user-defined and non-user-defined network-modes` when a named network meets host, and
+# `failed to set up container networking` for host plus bridge (all measured on 29.7.2).
+# Two distinct user-defined networks it does accept -- but build.sh has one network to
+# give, so refuse either way, the way the unconfined and duplicate-mount checks below do.
+_net_count() {   # $1 = a raw option string -> how many --network/--net OPTION TOKENS it holds
+  local _n=0 _t
+  # Unquoted on purpose: this is exactly how CACHE_MOUNTS and DOCKER_RUN_OPTS are built
+  # from these same strings further down, so the guard counts what docker will actually
+  # receive, on any IFS separator rather than on literal spaces alone.
+  for _t in $1; do
+    case "$_t" in --net|--net=*|--network|--network=*) _n=$((_n+1)) ;; esac
+  done
+  printf '%s' "$_n"
+}
+_net_n=0
+_net_srcs=""
+_net_add() {     # $1 = variable name (for the message), $2 = its value
+  local _c; _c=$(_net_count "$2")
+  [ "$_c" -gt 0 ] || return 0
+  _net_n=$(( _net_n + _c )); _net_srcs="${_net_srcs:+$_net_srcs, }$1"
+}
+[ -n "${XT_DOCKER_NETWORK:-}" ] && { _net_n=1; _net_srcs="XT_DOCKER_NETWORK"; }
+_net_add XT_CACHE_MOUNTS    "${XT_CACHE_MOUNTS:-}"
+_net_add XT_DOCKER_RUN_OPTS "${XT_DOCKER_RUN_OPTS:-}"
+# XT_DOCKER_RUN_OPTS_AOSP reaches one container, and only when the AOSP stage runs, so it
+# can only collide then. The unconfined check below gates on AAOS_MODE the same way.
+[ "$AAOS_MODE" = source ] && _net_add XT_DOCKER_RUN_OPTS_AOSP "${XT_DOCKER_RUN_OPTS_AOSP:-}"
+if [ "$_net_n" -gt 1 ]; then
+  echo "ERROR: $_net_n docker network options would land on the same \`docker run\` command" >&2
+  echo "       line, from: $_net_srcs. build.sh has one network to give." >&2
+  echo "       docker rejects most such pairs with rc=125 once the build has started, so" >&2
+  echo "       drop all but one of them." >&2
+  echo "       Prefer XT_DOCKER_NETWORK=host: it also reaches \`docker build\`, which fetches" >&2
+  echo "       packages too, and it is what README and docs/BUILD.md recommend." >&2
+  echo "       Only host, none and default work there -- BuildKit refuses \`docker build" >&2
+  echo "       --network=bridge\` and named networks -- so for any other network use" >&2
+  echo "       XT_DOCKER_RUN_OPTS and leave XT_DOCKER_NETWORK empty." >&2
+  exit 1
+fi
+unset _net_n _net_srcs
+unset -f _net_count _net_add
+# Host networking may also have been requested through the raw run options. Only the
+# global ones: XT_DOCKER_RUN_OPTS_AOSP would put the AOSP container on the host network
+# while every OTHER container stayed bridged and still received -e HTTPS_PROXY, which is
+# exactly the case this check exists to refuse.
 _hostnet=no
 case " ${XT_DOCKER_RUN_OPTS:-} " in *" --network=host "*|*" --network host "*|*" --net=host "*|*" --net host "*) _hostnet=yes ;; esac
 if [ "${XT_DOCKER_NETWORK:-}" != host ] && [ "$_hostnet" != yes ]; then
