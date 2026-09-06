@@ -857,7 +857,7 @@ generation alike, unverified.
   AOSP checkout is found, else off (or a hard error if DomA was required via `-a`).
 
 A **prebuilt bundle** is a directory (`--aaos-prebuilt=<dir>`, default probe
-`<workspace>/aaos-prebuilt`) with:
+`<workspace>/aaos-prebuilt-<board>` then `<workspace>/aaos-prebuilt`) with:
 
 - `<dir>/images/` — the six p4 images, and
 - `<dir>/files/` — `aaos-android-kernel-xenbuilt-6.18.32` (the version is `AAOS_GUEST_KERNEL`) and
