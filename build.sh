@@ -170,6 +170,9 @@ Environment (no flag):
                          Distinct from the V4H workspace's "sodev-builder" on purpose:
                          --rebuild-images rebuilds THIS tag only.
       AGL_DOCKER         Image for the DomU AGL bitbake (default: $XT_DOCKER).
+      AGL_IMAGE          Image recipe bitbaked for the DomU AGL guest
+                         (default: agl-cluster-demo-flutter-guest).
+      AGL_MACHINE        MACHINE for the DomU AGL build (default: virtio-aarch64).
       BB_HASHSERVE       Hash-equivalence server for every bitbake in this build (the
                          moulin Yocto domains AND the DomU AGL bitbake), e.g.
                          "unix:///path/hashserve.sock" (mount it via XT_CACHE_MOUNTS)
@@ -186,6 +189,10 @@ Environment (no flag):
       AAOS_GUEST_ANDROID Android major version of the DomA guest (default: 17).
       AAOS_GUEST_KERNEL  GKI kernel version of the DomA guest (default: 6.18.32); names
                          the staged kernel artifact and is checked against the bundle.
+      AAOS_KERNEL_MD5    Expected md5 of the staged DomA guest kernel and vendor-boot
+      AAOS_RAMDISK_MD5   ramdisk. OPT-IN and off by default: set them only to pin one
+                         validated prebuilt bundle, and a mismatch then fails the
+                         aaos-guest-binaries recipe.
 
 Examples:
   ./build.sh                                        # Dom0(zephyr)+DomD only (fast; DomU/DomA-less SD)
