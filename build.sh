@@ -730,10 +730,24 @@ STAGE_RUN_OPTS=()
 # container it breaks nsjail as well. Refuse the global form up front instead of failing
 # 30 minutes in at the DomU bitbake; refuse the _AOSP form when the AOSP build will
 # actually run, since the genrule would fail hours in.
+# apparmor=unconfined is matched as a substring on purpose: it is the VALUE of a
+# --security-opt, so it appears as `--security-opt apparmor=unconfined` or
+# `--security-opt=apparmor:unconfined` and neither form has a fixed shape. --privileged
+# is matched as a TOKEN, because a literal-space test misses the tab and newline
+# separators the word-splitting further down accepts -- the same gap closed in _hostnet
+# above, and here it fails the unsafe way: the check would let the container through.
+_asks_unconfined() {   # $1 = a raw option string -> "yes" if it asks for an unconfined container
+  local _t
+  case "$1" in *apparmor[=:]unconfined*) printf yes; return 0 ;; esac
+  for _t in $1; do
+    case "$_t" in --privileged|--privileged=*) printf yes; return 0 ;; esac
+  done
+  printf no
+}
 _userns_restricted=$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)
 if [ "$_userns_restricted" = 1 ]; then
-  case " ${XT_DOCKER_RUN_OPTS:-} " in
-    *apparmor[=:]unconfined*|*" --privileged "*|*" --privileged="*)
+  case "$(_asks_unconfined "${XT_DOCKER_RUN_OPTS:-}")" in
+    yes)
       echo "ERROR: XT_DOCKER_RUN_OPTS relaxes AppArmor for EVERY build container, and this host has" >&2
       echo "       kernel.apparmor_restrict_unprivileged_userns=1: an unconfined container cannot" >&2
       echo "       create user namespaces, so bitbake's sanity check fails in every Yocto domain" >&2
@@ -749,8 +763,8 @@ if [ "$_userns_restricted" = 1 ]; then
       exit 1 ;;
   esac
   if [ "$AAOS_MODE" = source ]; then
-    case " ${XT_DOCKER_RUN_OPTS_AOSP:-} " in
-      *apparmor[=:]unconfined*|*" --privileged "*|*" --privileged="*)
+    case "$(_asks_unconfined "${XT_DOCKER_RUN_OPTS_AOSP:-}")" in
+      yes)
         echo "ERROR: XT_DOCKER_RUN_OPTS_AOSP makes the AOSP container unconfined, and this host has" >&2
         echo "       kernel.apparmor_restrict_unprivileged_userns=1: a user namespace created by an" >&2
         echo "       unconfined process gets no capabilities, so nsjail's mount('/','/',MS_REC|MS_PRIVATE)" >&2
@@ -767,6 +781,7 @@ if [ "$_userns_restricted" = 1 ]; then
   fi
 fi
 unset _userns_restricted
+unset -f _asks_unconfined
 # Reuse an external Yocto sstate/downloads cache for faster rebuilds: mount it into
 # the containers and let bitbake pick it up via XT_SSTATE_DIR/XT_DL_DIR (rpi5-sodev.yaml
 # reads them with os.getenv; passed through below). A dir already under $workdir is
