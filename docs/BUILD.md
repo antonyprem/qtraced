@@ -544,14 +544,16 @@ pip install git+https://github.com/xen-troops/moulin.git@83e80587c4b1348714237d3
 ```
 
 This project provides additional parameters; check them with `--help-config`. There is one
-yaml per board -- `rpi5-sodev.yaml` and `rpi4-sodev.yaml` -- and they take the same four
+yaml per board -- `rpi5-sodev.yaml` and `rpi4-sodev.yaml` -- and they take the same six
 parameters, differing only in the SKUs `--BOARD_RAM` accepts:
 
 ```
 $ moulin rpi5-sodev.yaml --help-config
 usage: moulin rpi5-sodev.yaml [--DOM0_OS {zephyr,linux}]
                               [--BOARD_RAM {16g,8g}] [--ENABLE_DOMU {no,yes}]
+                              [--ENABLE_DOMU_RESERVED {no,yes}]
                               [--ENABLE_ANDROID {no,yes}]
+                              [--ENABLE_DOMZ {no,yes}]
 
 Config file description: Raspberry Pi 5 + Xen 4.22 — AGL SoDeV disaggregated
 cockpit (Zephyr or thin-Linux Dom0)
@@ -570,9 +572,18 @@ options:
                         rootfs and add them to the SD image (p1 kernel + p3
                         rootfs). yaml default no (V4H style); build.sh adds it
                         only with -u/--domu. (default: no)
+  --ENABLE_DOMU_RESERVED {no,yes}
+                        Reserve an empty SD p3 in place of the DomU rootfs so
+                        the DomA nested GPT stays at p4 in a DomU-less build.
+                        Derived by build.sh; do not set by hand. (default: no)
   --ENABLE_ANDROID {no,yes}
                         Build Android (AAOS) as a guest VM and add it as the
                         full SD image p4 (nested GPT) (default: no)
+  --ENABLE_DOMZ {no,yes}
+                        Build DomZ (Zephyr as an unprivileged DomU) and add it
+                        to the SD image (p1 zephyr-domz.bin + the DomZ xl
+                        cfg). yaml default no; build.sh adds it with --domz.
+                        (default: no)
 ```
 
 Moulin will generate a `build.ninja` file; then run ninja to build and to
