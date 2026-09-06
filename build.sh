@@ -100,11 +100,12 @@ Domain options:
                            DomD 4096 + DomU 1024 + DomA 4096 = 9728 MiB); 8g =
                            DomD 3072 MiB (static-mem bank4 dropped) and DomA 3072 MiB,
                            Dom0/DomU unchanged, total 7680 MiB, ~436 MiB headroom.
-                         rpi4: 8g (default) = Dom0 256 + DomD 1920 MiB (three static-mem
-                           banks) + DomU 1024 + DomA 2560; 4g = DomD 1024 MiB (bank2
-                           dropped, bank0 640 MiB); DomA and DomU then cannot RUN at
-                           the same time (each fits alone) -- build.sh says so and both
-                           still go on the SD, so pick one at run time.
+                         rpi4: 8g (default) = Dom0 128 (zephyr, the default) or 256
+                           (linux) + DomD 1920 MiB (three static-mem banks) + DomU 1024
+                           + DomA 2560; 4g = DomD 1024 MiB (bank2 dropped, bank0 640
+                           MiB); DomA and DomU then cannot RUN at the same time (each
+                           fits alone) -- build.sh says so and both still go on the SD,
+                           so pick one at run time.
       --domains-only     Build the domains but skip SD-image assembly (no full.img;
                          with -a this also skips the DomA p4 nested GPT, which rouge
                          assembles only during SD-image assembly)
@@ -433,8 +434,10 @@ if [ "$ENABLE_DOMU_RESERVED" = yes ] && [ -n "$NINJA_TARGET" ]; then
 fi
 
 # --- 4 GiB Raspberry Pi 4: DomU and DomA cannot both run -> refuse -------------
-# On the 4 GiB SKU Dom0 (256) + DomD (1024) + DomA (2560) has been booted on hardware
-# with 158 MiB of Xen free memory left; DomU alone fits too. What does not fit is DomU
+# On the 4 GiB SKU Dom0 (128, the default zephyr flavour -- the hardware row in
+# meta-rpi-sodev/meta-xt-rpi4/README.md records the flavour for this measurement) +
+# DomD (1024) + DomA (2560) has been booted on hardware with 158 MiB of Xen free
+# memory left; DomU alone fits too. What does not fit is DomU
 # and DomA together, so an image carrying both is an image whose two guests cannot both
 # start. This used to be only a NOTE, because DomA's p4 needed DomU's p3 to exist and
 # refusing would have blocked the only 4 GiB configuration that can run DomA at all.
