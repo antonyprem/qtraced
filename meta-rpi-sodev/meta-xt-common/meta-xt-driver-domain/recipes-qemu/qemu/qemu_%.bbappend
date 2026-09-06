@@ -62,6 +62,21 @@ SRC_URI:append:class-target = " file://0113-linux-user-guard-sched-attr-redefini
 # ${PN}-system-aarch64 so OE does not drop an empty package.
 FILES:${PN}-aarch64:class-target = "${bindir}/qemu-aarch64"
 FILES:${PN}-system-aarch64:class-target = "${bindir}/qemu-system-aarch64"
+# The same upstream split also leaves an RPROVIDES alias behind: meta-virtualization
+# declares RPROVIDES:${PN}-aarch64:append:class-target = " ${PN}-system-aarch64"
+# because in ITS layout qemu-aarch64 ships both binaries. Here it does not (see the
+# two FILES lines above), and the alias makes the SBOM name the wrong package. poky's
+# collect_package_providers() (meta/lib/oe/spdx_common.py) maps every RPROVIDES to a
+# provider in one flat dict while walking PACKAGES in order, so the alias carried by
+# qemu-aarch64 -- which comes after qemu-system-aarch64 in PACKAGES -- overwrites the
+# entry qemu-system-aarch64 registered for itself. The rootfs SPDX document then lists
+# qemu-aarch64, which is not installed, and omits qemu-system-aarch64, which is.
+# Dropping the alias costs nothing here: each package owns exactly one binary, and the
+# image asks for qemu-system-aarch64 by its real name. The :class-target override
+# mirrors the one upstream uses, so this line is inert for nativesdk-qemu exactly as
+# the alias is. qemu-user-aarch64 is left alone -- that alias names no real package,
+# so it clobbers nothing.
+RPROVIDES:${PN}-aarch64:remove:class-target = "${PN}-system-aarch64"
 
 # --- common-0004: vhost backends for enable_virtio, drop kvm ---
 # With the enable_virtio DISTRO_FEATURE:
