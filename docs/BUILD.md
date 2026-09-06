@@ -367,7 +367,7 @@ A complete image has four partitions:
 |---|---|---|---|
 | 1 | `boot` | 512 MiB | FAT, populated by rouge from the yaml: RPi firmware (`bootcode.bin`, `start*.elf`, `fixup*.dat`, `config.txt`, `cmdline.txt`; rpi5 adds `armstub8-2712.bin`, rpi4 `bl31.bin`), `u-boot`, `xen`, the DomD kernel `Image` and DTBs (board DTB, the Xen DTBO, `*-domd-vc4.dtb`; rpi5 `overlays/bcm2712d0.dtbo`, rpi4 `overlays/disable-bt.dtbo`), `boot.scr`; then per option: `zephyr.bin` (Zephyr Dom0) or `initramfs-xt-dom0-thin.cpio.gz` (Linux Dom0), `linux-domu` (`-u`), the two DomA boot artifacts `aaos-android-kernel` + `aaos-vendor-boot-ramdisk` (`-a`), `zephyr-domz.bin` (`-z`) |
 | 2 | `domd` | 9216 MiB | DomD (driver domain) rootfs |
-| 3 | `domu` | 2048 MiB | DomU AGL instrument-cluster rootfs (present with `-u`) |
+| 3 | `domu` \| `reserved` | 2048 MiB \| 8 MiB | Three states. With `-u`: the DomU AGL instrument-cluster rootfs. Without `-u` but with DomA: an **empty 8 MiB `reserved`** partition, so the DomA nested GPT still lands on p4 (`doma.cfg`'s qemu opens p4) — `build.sh` derives this and prints a NOTE about it. With neither DomU nor DomA: p3 does not exist |
 | 4 | `android` | ~14662 MiB (measured) | DomA as a nested GPT (present with DomA). Not a fixed size: the six explicitly sized members (`*_b` slots, `misc`, `metadata`) total 172 MiB, the four `_a` slots take their image's size, and `super` / `userdata` follow the AOSP output (the yaml omits `size:` for them on purpose) -- so it changes with every AOSP build |
 
 **Checkpoint** -- the build should not have left anything staged in the tree:
