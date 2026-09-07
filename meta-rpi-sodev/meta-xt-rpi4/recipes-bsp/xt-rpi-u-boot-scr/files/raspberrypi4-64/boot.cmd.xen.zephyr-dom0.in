@@ -103,9 +103,10 @@
 #          choice is which one is started.
 # Xen's 80 MiB is measured, not assumed: `xl info` across three DomD sizes on the
 # 4 GiB board gave 78/79/80 MiB of overhead (frametable + xenheap + image).
-# The memory-map cross-check re-derives both configurations from THIS file and the
-# host overlay, including Xen's allocate_memory_11() placement, so the two cannot
-# drift apart.
+# Nothing re-derives the two configurations from THIS file and the host overlay on
+# this board: tools/check-memory-map.py models BCM2712 only
+# (meta-xt-rpi4/README.md), so this file and the overlay can drift apart silently.
+# Keep them in step by hand.
 setenv board_ram BOARD_RAM_PLACEHOLDER
 
 fdt addr ${fdt_addr}
@@ -179,8 +180,9 @@ fdt apply 0x2200000
 # Dom0's bank[0] placement is NOT affected: shrinking bank0 only frees memory at
 # 0x68000000-0x80000000, which is above the 1 GiB lowmem_bitsize window
 # allocate_memory_11() searches. The low map (modules below 0x08000000, DomD bank1
-# 0x08000000-0x20000000, the free hole at 0x20000000) is untouched -- verified by
-# The memory-map cross-check, which still derives bank[0] at 0x20000000.
+# 0x08000000-0x20000000, the free hole at 0x20000000) is untouched, which is why
+# bank[0] stays where it was measured. Nothing verifies that automatically here:
+# tools/check-memory-map.py models BCM2712 only (meta-xt-rpi4/README.md).
 #
 # The `if test` below is safe to rely on: cmd/Makefile:180 is
 # `obj-$(CONFIG_HUSH_PARSER) += test.o`, and this u-boot has CONFIG_HUSH_PARSER=y
@@ -188,8 +190,9 @@ fdt apply 0x2200000
 # CONFIG_CMD_TEST to forget. That matters because a missing `test` would make the
 # condition fail and silently select the 8 GiB map on a 4 GiB board.
 #
-# The memory-map cross-check re-derives this override for BOTH flavours and requires
-# them to agree, so keep the two boot.cmd files byte-identical in this block.
+# Nothing checks that the two flavours agree on this override -- tools/check-memory-map.py
+# models BCM2712 only -- so keep the two boot.cmd files byte-identical in this block
+# by hand.
 if test "${board_ram}" = "4g" ; then
     echo "board_ram=4g: DomD 1024 MiB (bank2 dropped, bank0 640 MiB)"
     fdt set /chosen/domD memory <0x0 0x100000>
@@ -304,9 +307,12 @@ fdt rm /framebuffer@3f800000
 #     MEMF_bits tier is not predictable -- but it makes those addresses reachable,
 #     which on its own is reason enough not to shrink dom0_mem.
 #     Dom0's size is a PLACEMENT LEVER on this board, not a memory requirement.
-#     The memory-map cross-check models the same scan and prints the relink target;
-#     tools/check-zephyr-patches.sh fails the build if rpi_4b.overlay's sram0 base
-#     disagrees with it.
+#     Nothing models this scan for BCM2711 and nothing fails the build if
+#     rpi_4b.overlay's sram0 base disagrees with it: tools/check-zephyr-patches.sh
+#     does not exist in this repo, and tools/check-memory-map.py models BCM2712
+#     only. The Zephyr board patch says the same thing
+#     (0019-boards-rpi_4b-zephyr-dom0-board.patch) -- read BANK[0] off the Xen
+#     console on the first boot; a mismatch is total UART silence.
 fdt set /chosen xen,xen-bootargs "console=dtuart dtuart=/soc/serial@7e201000 dom0_mem=128M dom0_max_vcpus=1 xsm=dummy gnttab_max_frames=512 bootscrub=off loglvl=all guest_loglvl=all sync_console"
 
 # -----------------------------------------------------------------------------

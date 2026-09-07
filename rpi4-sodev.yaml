@@ -106,9 +106,11 @@ variables:
   XT_DOMU_IMAGE: "rpi5-image-domu-gfx"
   DOMD_CAN_TYPE: ""
   # DOMD_ROOTFS_DEV (usb default = /dev/sda1), kept sed-escaped to mirror rpi5.yaml.
-  # NOTE: INERT on this board. On rpi5 (xt-rpi-u-boot-scr's only COMPATIBLE_MACHINE)
-  # do_compile:raspberrypi5 installs a STATIC board-tuned boot.cmd
-  # (meta-xt-rpi4 boot.cmd.xen.{zephyr,linux}-dom0.in) with the DomD cmdline hard-coded;
+  # NOTE: INERT on this board. meta-xt-rpi4's xt-rpi-u-boot-scr (COMPATIBLE_MACHINE =
+  # ^raspberrypi4-64$; meta-xt-rpi5 carries a separate recipe of the same name for
+  # ^raspberrypi5$) has a do_compile:raspberrypi4-64 that installs a STATIC
+  # board-tuned boot.cmd (meta-xt-rpi4 boot.cmd.xen.{zephyr,linux}-dom0.in) with the
+  # DomD cmdline hard-coded;
   # there is no `sed 's/@@..@@/../'` template substitution, so neither this value nor the
   # DOMD_BOOTARGS that references it (below) reaches the boot script. Retained (escaping
   # and all) only to keep the %{DOMD_ROOTFS_DEV} expansion in DOMD_BOOTARGS valid and to
@@ -604,8 +606,9 @@ parameters:
   # `setenv board_ram <value>` (substituted by the xt-rpi-u-boot-scr bbappend) and
   # branch on it at run time with `fdt set /chosen/domD memory|xen,static-mem`, so
   # the 4 GiB delta is a few lines in ONE file rather than a second overlay or a
-  # second script. tools/check-memory-map.py validates BOTH values against Xen's
-  # allocate_memory_11() placement and the real DRAM banks.
+  # second script. NOTE: tools/check-memory-map.py does NOT validate these values --
+  # it models BCM2712 only and its BUDGET table has no rpi4 rows
+  # (meta-xt-rpi4/README.md).
   BOARD_RAM:
     desc: "Target Raspberry Pi 4 SKU: 8g (default; all four domains up together) or 4g (DomD 1024 MiB; DomU or DomA, one at a time)"
     "8g":
@@ -1057,8 +1060,8 @@ components:
         # boot.cmd.xen.{zephyr,linux}-dom0.in, where cma=192M actually lives), NOT
         # in the DOMD_BOOTARGS below -- which is inert here (see the
         # DOMD_ROOTFS_DEV note in the variables block). Edit the .in template to
-        # change the real value. tools/check-memory-map.py prints the authoritative
-        # bank list and total.
+        # change the real value. NOTE: tools/check-memory-map.py does not print an
+        # authoritative bank list for this board -- it models BCM2712 only.
         # Avoid swiotlb=force / iommu.passthrough=1 — those broke
         # v3d clock probe in 2026-05-06 testing.
         # 5/7 verbose: drop `quiet`, raise loglevel + ignore_loglevel +

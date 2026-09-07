@@ -38,8 +38,9 @@ DOM0_OS ??= "zephyr"
 # Board RAM size: 8g (default) or 4g. rpi4-sodev.yaml injects it from the BOARD_RAM
 # moulin parameter (build.sh --ram=8g|4g). The boot scripts carry
 # `setenv board_ram BOARD_RAM_PLACEHOLDER` and branch on the resulting env var at
-# run time, so the whole 4 GiB delta lives in ONE file that
-# The memory-map cross-check can validate for both values.
+# run time, so the whole 4 GiB delta lives in ONE file.
+# No checker validates either value on this board: tools/check-memory-map.py models
+# BCM2712 only (meta-xt-rpi4/README.md).
 BOARD_RAM ??= "8g"
 
 do_compile:raspberrypi4-64() {

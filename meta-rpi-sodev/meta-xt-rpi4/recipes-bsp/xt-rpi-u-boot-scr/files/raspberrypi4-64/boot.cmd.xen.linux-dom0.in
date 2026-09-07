@@ -84,7 +84,9 @@
 # boot.cmd.xen.zephyr-dom0.in -- and that changing anything in this map means
 # reading BANK[0] again. (Referenced by content, not line: the zephyr script's
 # line numbers move.)
-# The memory-map cross-check re-derives all of this and prints both numbers.
+# NOTE: nothing re-derives this automatically on BCM2711. tools/check-memory-map.py
+# models BCM2712 only (meta-xt-rpi4/README.md), so these numbers are confirmed by
+# reading (XEN) BANK[0] off the console, not by a tool.
 #
 # bank[0] below 1 GiB also guarantees Dom0 a ZONE_DMA, which it needs because it
 # keeps the SD card in this flavour. Do not fill that hole with module loads.
@@ -123,9 +125,10 @@
 #          choice is which one is started.
 # Xen's 80 MiB is measured, not assumed: `xl info` across three DomD sizes on the
 # 4 GiB board gave 78/79/80 MiB of overhead (frametable + xenheap + image).
-# The memory-map cross-check re-derives both configurations from THIS file and the
-# host overlay, including Xen's allocate_memory_11() placement, so the two cannot
-# drift apart.
+# Nothing re-derives the two configurations from THIS file and the host overlay on
+# this board: tools/check-memory-map.py models BCM2712 only
+# (meta-xt-rpi4/README.md), so this file and the overlay can drift apart silently.
+# Keep them in step by hand.
 setenv board_ram BOARD_RAM_PLACEHOLDER
 
 fdt addr ${fdt_addr}
@@ -210,8 +213,9 @@ fdt apply 0x2200000
 # Dom0's bank[0] placement is NOT affected: shrinking bank0 only frees memory at
 # 0x68000000-0x80000000, which is above the 1 GiB lowmem_bitsize window
 # allocate_memory_11() searches. The low map (modules below 0x08000000, DomD bank1
-# 0x08000000-0x20000000, the free hole at 0x20000000) is untouched -- verified by
-# The memory-map cross-check, which still derives bank[0] at 0x20000000.
+# 0x08000000-0x20000000, the free hole at 0x20000000) is untouched, which is why
+# bank[0] stays where it was measured. Nothing verifies that automatically here:
+# tools/check-memory-map.py models BCM2712 only (meta-xt-rpi4/README.md).
 #
 # The `if test` below is safe to rely on: cmd/Makefile:180 is
 # `obj-$(CONFIG_HUSH_PARSER) += test.o`, and this u-boot has CONFIG_HUSH_PARSER=y
@@ -219,8 +223,9 @@ fdt apply 0x2200000
 # CONFIG_CMD_TEST to forget. That matters because a missing `test` would make the
 # condition fail and silently select the 8 GiB map on a 4 GiB board.
 #
-# The memory-map cross-check re-derives this override for BOTH flavours and requires
-# them to agree, so keep the two boot.cmd files byte-identical in this block.
+# Nothing checks that the two flavours agree on this override -- tools/check-memory-map.py
+# models BCM2712 only -- so keep the two boot.cmd files byte-identical in this block
+# by hand.
 if test "${board_ram}" = "4g" ; then
     echo "board_ram=4g: DomD 1024 MiB (bank2 dropped, bank0 640 MiB)"
     fdt set /chosen/domD memory <0x0 0x100000>
@@ -287,7 +292,8 @@ fi
 # memory the controller cannot reach is wrong on its own terms: every SD transfer
 # would otherwise bounce through swiotlb, and `Policy zone: DMA32` meant ordinary
 # allocations landed in the unreachable bank by preference.
-# The memory-map cross-check check 6b now enforces it.
+# Nothing enforces it. There is no such check: the BCM2712 checker implements
+# checks 1-7, has no 6b, and has no rpi4 rows at all.
 #
 # The Zephyr flavour is unaffected: there DomD owns emmc2 together with expgpio,
 # and its Dom0 already uses 128M for the relink target (see the map comment above).
