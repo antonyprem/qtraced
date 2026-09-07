@@ -619,12 +619,32 @@ if [ "$_net_n" -gt 1 ]; then
 fi
 unset _net_n _net_srcs
 unset -f _net_count _net_add
-# Host networking may also have been requested through the raw run options. Only the
-# global ones: XT_DOCKER_RUN_OPTS_AOSP would put the AOSP container on the host network
-# while every OTHER container stayed bridged and still received -e HTTPS_PROXY, which is
-# exactly the case this check exists to refuse.
+# Host networking may also have been requested through the raw run options. Expand them the
+# way docker will receive them -- unquoted, so this gets exactly the word splitting AND the
+# globbing the argv further down is built with -- rather than testing for literal-space
+# substrings: a tab or a newline between two options is as valid as a space, and the
+# substring form misses those. Two variables can ask for it, and both reach EVERY container
+# (XT_DOCKER_RUN_OPTS at the DOCKER_RUN_OPTS line below, XT_CACHE_MOUNTS at the CACHE_MOUNTS
+# one), so both are scanned -- separately, because a --network at the end of one must not
+# pair with a bare `host` at the start of the other. XT_DOCKER_RUN_OPTS_AOSP is left out on
+# purpose: it would put the AOSP container on the host network while every OTHER container
+# stayed bridged and still received -e HTTPS_PROXY, which is exactly what this refuses.
 _hostnet=no
-case " ${XT_DOCKER_RUN_OPTS:-} " in *" --network=host "*|*" --network host "*|*" --net=host "*|*" --net host "*) _hostnet=yes ;; esac
+_net_host_scan() {   # $1 = a raw option string -> sets _hostnet=yes if it asks for host
+  local _prev="" _tok
+  for _tok in $1; do
+    case "$_prev" in
+      --net|--network) if [ "$_tok" = host ]; then _hostnet=yes; fi ;;
+    esac
+    case "$_tok" in
+      --net=host|--network=host) _hostnet=yes ;;
+    esac
+    _prev="$_tok"
+  done
+}
+_net_host_scan "${XT_DOCKER_RUN_OPTS:-}"
+_net_host_scan "${XT_CACHE_MOUNTS:-}"
+unset -f _net_host_scan
 if [ "${XT_DOCKER_NETWORK:-}" != host ] && [ "$_hostnet" != yes ]; then
   for v in HTTPS_PROXY HTTP_PROXY https_proxy http_proxy; do
     _p="${!v:-}"; [ -n "$_p" ] || continue
