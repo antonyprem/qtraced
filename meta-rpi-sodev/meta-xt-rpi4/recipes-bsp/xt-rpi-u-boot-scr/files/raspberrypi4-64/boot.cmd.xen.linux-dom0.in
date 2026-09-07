@@ -58,13 +58,32 @@
 # and DomD's static-mem taking 0x08000000-0x20000000 and 0x40000000-0x80000000:
 #   dom0_mem=1024M -> order = 1 GiB: no 1 GiB-aligned 1 GiB block below 1 GiB
 #                     -> 512 MiB: 0x20000000 has only 436 MiB free above it
-#                     -> 256 MiB: 0x20000000 fits exactly.  bank[0] = 256 MiB.
+#                     -> 256 MiB: not free either — the firmware leaves the host
+#                        DT blob at 0x2eff1f00, inside 0x20000000-0x30000000
+#                     -> 128 MiB: fits, and TWO naturally-aligned 128 MiB blocks
+#                        are free below the window (0x20000000 and 0x30000000,
+#                        derived further down in this file), so the order is
+#                        settled but the address is not.
 # The rest of the 1024 MiB is NOT in bank[0]: the second loop fills further banks
 # below 1 GiB (0x30000000-0x3b400000) and then, once it drops below
-# min_low_order, sets lowmem = false and continues above 1 GiB. So the START of
-# bank[0] is deterministic at 0x20000000 while its SIZE is not — which is exactly
-# why the Zephyr flavour uses dom0_mem=128M, where the first allocation lands at
-# 0x20000000 with the full 128 MiB and the relink target is unambiguous.
+# min_low_order, sets lowmem = false and continues above 1 GiB.
+#
+# So the SIZE follows what is free, and the START is a MEASUREMENT, not a
+# derivation. bank[0] came out at 0x20000000, 128 MiB wide, in all three
+# configurations booted on this board (zephyr at 128M, and linux at 256M and
+# 512M further down), but the algorithm does not promise that address: when more
+# than one naturally-aligned block of the chosen order is free, which one
+# alloc_domheap_pages() returns depends on the buddy free-list state.
+# tools/check-memory-map.py — which models BCM2712 only, so it is cited here for
+# what it RECORDS, not as a checker for this board — has two rpi5 measurements
+# where the winner was the lowest candidate once and the highest the next, and
+# says plainly not to re-derive a rule from one board (:358-376).
+# The Zephyr flavour's dom0_mem=128M does not make the address derivable either.
+# What makes its relink safe is that the address was read off the Xen console on
+# hardware -- see the CONFIRMED ON HARDWARE block in
+# boot.cmd.xen.zephyr-dom0.in -- and that changing anything in this map means
+# reading BANK[0] again. (Referenced by content, not line: the zephyr script's
+# line numbers move.)
 # The memory-map cross-check re-derives all of this and prints both numbers.
 #
 # bank[0] below 1 GiB also guarantees Dom0 a ZONE_DMA, which it needs because it
