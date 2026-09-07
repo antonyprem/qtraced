@@ -9,8 +9,9 @@
 # address layout stays byte-identical:
 #   1. /chosen/dom0 is zephyr.bin instead of the Linux Image, and there is no
 #      Dom0 initramfs (Zephyr runs its own xu-create application);
-#   2. dom0_mem is sized so Xen's Dom0 bank[0] placement is deterministic — see
-#      the ZEPHYR SRAM RELINK note below;
+#   2. dom0_mem is sized for Xen's Dom0 bank[0] PLACEMENT, and the address it
+#      lands on is a hardware reading rather than a derivation — see the
+#      ZEPHYR SRAM RELINK note below;
 #   3. the SD card and its expgpio-backed regulators go to DomD, so none of the
 #      linux-flavour supply stripping is needed and the slot keeps UHS-I.
 #
@@ -47,12 +48,18 @@
 # land below 1 GiB — unlike RPi5, which has no platform entry, gets the 32-bit
 # default, and therefore placed Dom0 at 0xc0000000.
 #
-# With the map above the only free naturally-aligned hole below 1 GiB big enough
-# for bank[0] is 0x20000000-0x30000000 (DomD bank1 ends at 0x20000000 and the
-# gpu_mem carve-out starts at 0x3b400000), so bank[0] is expected at
+# With the map above TWO naturally-aligned 128 MiB blocks are free below the
+# 1 GiB window: 0x20000000 and 0x30000000. (DomD bank1 ends at 0x20000000, the
+# firmware leaves the host DT blob at 0x2eff1f00 so the block above 0x28000000
+# is not free, and the gpu_mem carve-out starts at 0x3b400000.) Both are in the
+# same MEMF_bits tier, so nothing in allocate_memory_11() decides between them
+# in a way this file can predict — the full derivation is in
+# boot.cmd.xen.linux-dom0.in. bank[0] was MEASURED at
 #   *** 0x20000000 ***
 # and that is the address to relink Zephyr's sram0 / CONFIG_SRAM_BASE_ADDRESS
-# to. dom0_mem below is chosen so the request is exactly that hole.
+# to. dom0_mem below is chosen so the request is one block of that order; the
+# address itself rests on the hardware reading below, and on re-reading BANK[0]
+# off the Xen console whenever anything in this map changes.
 #
 # CONFIRMED ON HARDWARE 2026-08-05 (4 GiB board, dom0_mem=128M). The Xen console
 # printed EXACTLY:
@@ -190,9 +197,10 @@ if test "${board_ram}" = "4g" ; then
 fi
 
 # dom0_mem is NOT board-dependent in this flavour: 128M is chosen for its
-# PLACEMENT (it is what makes allocate_memory_11() land bank[0] at exactly
-# 0x20000000, the Zephyr relink target), not for Zephyr's appetite, and that
-# placement is identical on both SKUs.
+# PLACEMENT (it makes allocate_memory_11() ask for one 128 MiB block below the
+# 1 GiB window, and bank[0] was measured at 0x20000000, the Zephyr relink
+# target), not for Zephyr's appetite, and the low map that produced that
+# reading is identical on both SKUs.
 echo "board_ram=${board_ram} dom0_mem=128M (placement-driven, board-independent)"
 
 # XSM Flask is off (xsm=dummy), so no policy module is wanted. Since the overlay's
@@ -266,9 +274,10 @@ fdt rm /framebuffer@3f800000
 # -----------------------------------------------------------------------------
 # dom0_mem=128M: Zephyr itself needs only a few MiB, but the value is chosen for
 # its PLACEMENT, not its size — it makes allocate_memory_11() request one
-# 128 MiB-aligned 128 MiB block below 1 GiB, which the map above leaves at
-# exactly 0x20000000. Changing it moves bank[0] and invalidates the Zephyr
-# relink, so keep the two in lockstep (see ZEPHYR SRAM RELINK above).
+# 128 MiB-aligned 128 MiB block below 1 GiB. The map above leaves two such
+# blocks free and bank[0] was measured at 0x20000000. Changing dom0_mem changes
+# the order, and with it the set of candidate addresses, so it invalidates the
+# Zephyr relink: keep the two in lockstep (see ZEPHYR SRAM RELINK above).
 #
 # WHY 128 AND NOT 256 (changed 2026-08-04), AND WHY NOT LESS:
 #   * 256M cannot be satisfied as ONE block on this board. The firmware places the
@@ -279,14 +288,21 @@ fdt rm /framebuffer@3f800000
 #     128M asks for exactly the first of those, so the declaration matches reality.
 #   * It frees 128 MiB. On the 4 GiB SKU that is 128 MiB more for the xl-created
 #     guest, which is the whole point of the 4 GiB cockpit budget.
-#   * 64M or 32M do NOT work. The scan is for a NATURALLY ALIGNED block starting
-#     from address 0, so a smaller order matches a LOWER hole:
-#         32 MiB -> 0x00000000  (config.txt loads armstub=bl31.bin there; TF-A BL31
-#                                and the secondary-CPU spin tables live in it)
-#         64 MiB -> 0x04000000  (the gap between the boot modules and DomD bank1;
-#                                no evidence it is unused, and Zephyr would have to
-#                                be relinked there)
-#        128 MiB -> 0x20000000  (the hole this map deliberately leaves)
+#   * 64M or 32M do NOT work. The scan is for a NATURALLY ALIGNED block, so a
+#     smaller order brings LOWER holes in as CANDIDATES, and those are worse
+#     places for Dom0 to land:
+#         32 MiB -> 0x00000000 becomes a candidate  (config.txt loads
+#                                armstub=bl31.bin there; TF-A BL31 and the
+#                                secondary-CPU spin tables live in it)
+#         64 MiB -> 0x04000000 becomes a candidate  (the gap between the boot
+#                                modules and DomD bank1; no evidence it is
+#                                unused, and Zephyr would have to be relinked)
+#        128 MiB -> the candidates are 0x20000000 and 0x30000000, and bank[0]
+#                                was measured at 0x20000000 (the hole this map
+#                                deliberately leaves)
+#     A smaller order does not GUARANTEE the lower address -- the pick inside one
+#     MEMF_bits tier is not predictable -- but it makes those addresses reachable,
+#     which on its own is reason enough not to shrink dom0_mem.
 #     Dom0's size is a PLACEMENT LEVER on this board, not a memory requirement.
 #     The memory-map cross-check models the same scan and prints the relink target;
 #     tools/check-zephyr-patches.sh fails the build if rpi_4b.overlay's sram0 base
