@@ -63,8 +63,8 @@
 # below 1 GiB (0x30000000-0x3b400000) and then, once it drops below
 # min_low_order, sets lowmem = false and continues above 1 GiB. So the START of
 # bank[0] is deterministic at 0x20000000 while its SIZE is not — which is exactly
-# why the Zephyr flavour uses dom0_mem=256M, where the first allocation lands at
-# 0x20000000 with the full 256 MiB and the relink target is unambiguous.
+# why the Zephyr flavour uses dom0_mem=128M, where the first allocation lands at
+# 0x20000000 with the full 128 MiB and the relink target is unambiguous.
 # The memory-map cross-check re-derives all of this and prints both numbers.
 #
 # bank[0] below 1 GiB also guarantees Dom0 a ZONE_DMA, which it needs because it
@@ -271,7 +271,7 @@ fi
 # The memory-map cross-check check 6b now enforces it.
 #
 # The Zephyr flavour is unaffected: there DomD owns emmc2 together with expgpio,
-# and its Dom0 already uses 256M for the relink target (see the map comment above).
+# and its Dom0 already uses 128M for the relink target (see the map comment above).
 setenv dom0mem 256M
 echo "board_ram=${board_ram} dom0_mem=${dom0mem} (all banks < 0x40000000 for emmc2 DMA)"
 
