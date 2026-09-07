@@ -160,7 +160,10 @@ Environment (no flag):
                          host's loopback. Default: Docker's bridge. This also reaches
                          `docker build`, which fetches too -- but only host, none and
                          default work there (BuildKit refuses bridge and named
-                         networks), so use XT_DOCKER_RUN_OPTS for those. Setting a
+                         networks), and build.sh refuses any other value when it
+                         has to build the image with BuildKit -- use
+                         XT_DOCKER_RUN_OPTS for those instead, or
+                         DOCKER_BUILDKIT=0 for the classic builder. Setting a
                          --network in both places puts two on the same `docker run`,
                          which build.sh refuses: it has one network to give.
       XT_DOCKER_RUN_OPTS Extra `docker run` opts applied verbatim to every build
@@ -1077,6 +1080,34 @@ in_docker() {  # $1=image, rest=command
 # Build a docker/ build image on demand (skip if present unless REBUILD_IMAGES=1).
 build_img() {  # $1=image tag, $2=dockerfile path relative to workdir
   if [ "${REBUILD_IMAGES}" != "1" ] && docker image inspect "$1" >/dev/null 2>&1; then return 0; fi
+  # BUILD_NET_OPTS is about to reach `docker build`, and BuildKit takes only three networks
+  # there: `--network=bridge` and named networks fail with rc=1, `network mode "bridge" not
+  # supported by buildkit` (measured on 29.7.2; the message goes on to suggest a custom
+  # buildx builder, which this script does not create). Two things narrow the check:
+  #   - the line above SKIPS the image build whenever the image is already present, and
+  #     then the value never reaches `docker build` at all, so refusing it up front would
+  #     break setups that work today;
+  #   - DOCKER_BUILDKIT=0 selects the classic builder, which DOES take a bridge and named
+  #     networks (both rc=0 on the same daemon), so that opt-out is left alone.
+  if [ "${DOCKER_BUILDKIT:-}" != "0" ]; then
+    case "${XT_DOCKER_NETWORK:-}" in
+      ''|host|none|default) ;;
+      *)
+        echo "ERROR: $1 has to be built now, and BuildKit's \`docker build\` cannot take" >&2
+        echo "       XT_DOCKER_NETWORK='$XT_DOCKER_NETWORK': it accepts only host, none and" >&2
+        echo "       default there. Three ways on:" >&2
+        echo "       - build the image once with XT_DOCKER_NETWORK=host; after that this" >&2
+        echo "         step is skipped and the value is only ever handed to \`docker run\`" >&2
+        echo "       - build it with the classic builder, which takes any network:" >&2
+        echo "           DOCKER_BUILDKIT=0 ./build.sh ..." >&2
+        echo "       - give the containers their network through the raw run options, which" >&2
+        echo "         never reach \`docker build\`. Clear this variable when you do, or the" >&2
+        echo "         two would land on the same \`docker run\` and be refused:" >&2
+        echo "           XT_DOCKER_NETWORK= XT_DOCKER_RUN_OPTS=\"--network=$XT_DOCKER_NETWORK\" \\" >&2
+        echo "             ./build.sh ..." >&2
+        exit 1 ;;
+    esac
+  fi
   echo ">> docker build $1  (-f $2)"
   # Proxy build args, for the configured variables only (see the unset loop above).
   # These are Docker's predefined proxy args: they reach every RUN in the Dockerfile
