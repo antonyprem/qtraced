@@ -31,8 +31,9 @@ scripts, `xen,reg` and `domd.cfg`'s `iomem`.
 memory|xen,static-mem`, so the whole delta is two lines per script rather than a second
 overlay.
 
-* **8g** — Dom0 128 MiB (zephyr, the default) or 256 MiB (linux), bank[0] at
-  `0x20000000` + DomD 1920 MiB (three static-mem banks: 384 MiB + 1 GiB + 512 MiB) +
+* **8g** — Dom0 128 MiB (zephyr, the default) or 256 MiB (linux) of `dom0_mem`,
+  with bank[0] measured at `0x20000000` on the 4 GiB board and the low map the
+  same here + DomD 1920 MiB (three static-mem banks: 384 MiB + 1 GiB + 512 MiB) +
   DomU 1024 MiB + DomA 2560 MiB. **This is the
   default, and it is the one SKU that has not been booted** — the board available to this
   port is a 4 GiB one. The map is derived from the same rules as the 4g map and builds

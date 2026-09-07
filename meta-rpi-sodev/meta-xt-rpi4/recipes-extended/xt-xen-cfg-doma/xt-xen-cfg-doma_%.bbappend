@@ -9,15 +9,25 @@
 # WHY 2560 MiB
 # The 8 GiB Pi 4 has to fit four domains into what is left after the boot-time
 # carve-outs, and the RPi4 map is not the Pi 5's:
-#   Xen + Dom0 bank[0] 256 MiB (0x20000000, and Zephyr Dom0 is relinked there)
+#   Dom0 128 MiB (zephyr) or 256 MiB (linux) of dom0_mem. The linux 256 is NOT
+#     one bank and NOT bank[0]'s size: it comes back as 128 MiB at 0x20000000
+#     plus 128 MiB at 0x30000000. The Zephyr Dom0 is relinked to 0x20000000,
+#     where bank[0] was measured -- see boot.cmd.xen.zephyr-dom0.in.
+#   Xen itself 80 MiB, a separate item, measured with `xl info` across three
+#     DomD sizes on the 4 GiB board (78/79/80 MiB of frametable + xenheap +
+#     image); see boot.cmd.xen.linux-dom0.in.
 #   DomD xen,static-mem  384 MiB + 1 GiB + 512 MiB = 1920 MiB, all below 4 GiB
 #   gpu_mem=76 for the VideoCore carve-out at the top of the low bank
+# 1920 + 256 + 1024 + 2560 + 80 = 5840 MiB of the 8052 MiB usable, which is the
+# same arithmetic rpi4-sodev.yaml:595-596 does.
 # DomU takes 1024 MiB from the remaining free pool and DomA 2560 MiB. Those two
 # numbers are the ones the sending environment booted all four domains with on real
 # hardware (2026-08-07); they have NOT been re-measured in this environment.
 #
-# The 4 GiB SKU cannot host DomA at all: its free pool is 1972 MiB (linux Dom0) or
-# 2228 MiB (zephyr Dom0), which takes DomU but leaves nothing like 2560 for DomA.
+# The 4 GiB SKU cannot host DomA at all: its free pool is 2596 MiB (linux Dom0)
+# or 2724 MiB (zephyr Dom0) -- DomD 1024 + Dom0 128..256 + Xen 80 = 1232..1360 of
+# 3956 usable, per rpi4-sodev.yaml:599-600 -- which takes DomU 1024, and takes
+# DomA 2560 on its own, but not both (3584).
 # build.sh rejects `--ram=4g` together with `-a`/`--android` for that reason, so this
 # recipe is never asked for a 4 GiB DomA.
 #
