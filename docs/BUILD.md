@@ -438,6 +438,24 @@ docker-worker instead, pass `AGL_DOCKER=<official-image> ./build.sh`.
 > address too -- `ss -lntp`), `XT_DOCKER_NETWORK=host`, or unsetting the variables so the
 > client config above applies.
 >
+> **The image build takes only three networks.** `XT_DOCKER_NETWORK` reaches `docker build`
+> as well as `docker run`, and BuildKit accepts only `host`, `none` and `default` there:
+> `docker build --network=bridge` and named networks are rc=1 with `network mode "bridge"
+> not supported by buildkit` (measured on docker 29.7.2). `build.sh` checks the value at the
+> point where it actually has to build the image -- not up front, because the image build is
+> skipped whenever the image is already present, and then the value only ever reaches
+> `docker run`. When it does refuse, it names three ways on:
+>
+> * build the image once with `XT_DOCKER_NETWORK=host`; after that the step is skipped;
+> * `DOCKER_BUILDKIT=0 ./build.sh ...` -- the classic builder does take a bridge and named
+>   networks (rc=0 on the same daemon), and `build.sh` leaves that opt-out alone;
+> * give the containers their network through `XT_DOCKER_RUN_OPTS`, which never reaches
+>   `docker build`, and clear `XT_DOCKER_NETWORK` so the two do not land on the same
+>   `docker run` (which the duplicate-network check refuses first).
+>
+> Giving `docker build` a non-host network under BuildKit itself would need a buildx builder
+> created with a `network` driver-opt; this script does not create one.
+>
 > **Proxy changes do not need `--rebuild-images`.** The proxy is not stored in the
 > `sodev-builder-rpi` image: `Dockerfile.builder` declares no `ENV` for it -- a
 > defined-but-empty `http_proxy` makes the AOSP `repo` launcher proxy through nothing
