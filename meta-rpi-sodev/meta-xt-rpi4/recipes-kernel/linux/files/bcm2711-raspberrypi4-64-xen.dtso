@@ -108,12 +108,19 @@
 		 * naturally-aligned POWER-OF-TWO block, trying `bits` upward from the
 		 * order so the first success is in the lowest window that can hold it,
 		 * and halving the order (down to 128 MiB) if none can — see the full
-		 * derivation in boot.cmd.xen.linux-dom0.in. On this map that lands
-		 * Dom0's bank[0] at 0x20000000 with 256 MiB whatever dom0_mem asks for:
-		 * the thin Dom0 kernel + initramfs fit, and Dom0 keeps
-		 * a ZONE_DMA for the SD controller in the DOM0_OS=linux flavour (where
+		 * derivation in boot.cmd.xen.linux-dom0.in -- which predates the numbers
+		 * below, and still concludes one 256 MiB bank; that file contradicts it
+		 * at :238-239. The SIZE here is NOT 256 MiB: dom0_mem caps the order and
+		 * min(dom0_mem, 128 MiB) floors it, and the firmware drops the host DT
+		 * blob at 0x2eff1f00, inside the window this layout leaves free. Both
+		 * flavours were MEASURED with bank[0] at 0x20000000, 128 MiB -- zephyr
+		 * asks for 128M and gets that one bank, linux asks for 256M and gets
+		 * 128 MiB here plus 128 MiB at 0x30000000. Which candidate of a given
+		 * order wins is not derived here; both numbers are measurements.
+		 * Either way the thin Dom0 kernel + initramfs fit, and Dom0 keeps a
+		 * ZONE_DMA for the SD controller in the DOM0_OS=linux flavour (where
 		 * Dom0, not DomD, owns emmc2). It is also the relink target for the
-		 * Zephyr Dom0
+		 * Zephyr Dom0.
 		 *
 		 * boot.cmd's module load addresses are chosen to miss every bank above
 		 * — the two files MUST be kept in sync (see the memory map comment at
